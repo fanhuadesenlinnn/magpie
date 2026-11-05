@@ -210,7 +210,7 @@ function routingPage(part) {
     if (actRead.classList.contains("busy")) return;
     actRead.classList.add("busy");
     actRead.setAttribute("aria-busy", "true");
-    try { await loadQuotas(true); } finally {
+    try { await loadQuotas("all"); } finally {
       actRead.classList.remove("busy");
       actRead.removeAttribute("aria-busy");
       steady(() => renderActs(listed()));
@@ -3659,7 +3659,16 @@ function routingPage(part) {
   // button made again each time is one WebKit may drop a click on
   const reqLabel = el("span", "label"), replayAll = el("button", "text");
   replayAll.onclick = () => replay(listed(), pinned);
-  reqHead.append(reqLabel, el("span", "grow"), reqNote, purposeTools, metricPick, replayAll);
+  // every group folded or opened at once (zzzkl on Discord): folds them
+  // all while any is open
+  const foldAll = el("button", "text rt-fold-all");
+  foldAll.type = "button";
+  foldAll.onclick = () => {
+    if ([...sessionRows.keys()].some((k) => !closedSessions.has(k))) for (const k of sessionRows.keys()) closedSessions.add(k);
+    else closedSessions.clear();
+    steady(renderHist);
+  };
+  reqHead.append(reqLabel, el("span", "grow"), reqNote, purposeTools, metricPick, foldAll, replayAll);
   // each request's row, kept while what it says is the same: the list
   // is redrawn on every trace update, and made again whole each time it
   // was most of what a busy gateway cost the page (#308)
@@ -3691,7 +3700,9 @@ function routingPage(part) {
     let changed = false;
     for (const k of keys) {
       const name = typeof titles[k] === "string" ? titles[k] : "";
-      if ((otherTitles.get(k) || "") !== name) { if (name) otherTitles.set(k, name); else otherTitles.delete(k); changed = true; }
+      // an answer without a name is a read that failed or ran late, not a
+      // session that lost its name: the one the page has stays (#5365)
+      if (name && otherTitles.get(k) !== name) { otherTitles.set(k, name); changed = true; }
     }
     return changed;
   }
@@ -3779,10 +3790,10 @@ function routingPage(part) {
     for (const g of groups.values()) {
       let x = sessionRows.get(g.key);
       if (!x) {
-        const b = el(g.key ? "button" : "div", "rt-session"), name = el("span", "nm"), dir = el("span", "dir"), meta = el("span", "summary"), cost = el("span", "cost"), arrow = el("span", "arrow");
+        const b = el("button", "rt-session"), name = el("span", "nm"), dir = el("span", "dir"), meta = el("span", "summary"), cost = el("span", "cost"), arrow = el("span", "arrow");
         b.append(arrow, name, dir, meta, cost);
         x = { b, name, dir, meta, cost, arrow };
-        if (g.key) b.onclick = () => {
+        b.onclick = () => {
           if (closedSessions.has(g.key)) closedSessions.delete(g.key); else closedSessions.add(g.key);
           steady(renderHist);
         };
@@ -3803,7 +3814,7 @@ function routingPage(part) {
         }
         return s;
       }, { cost: 0, tokens: 0, priced: 0, unpriced: 0, running: 0, completed: 0, prompt: 0, read: 0, cached: 0, decodeMs: 0, decodeOut: 0, timed: 0 });
-      setText(x.arrow, g.key ? open ? "▾" : "▸" : "");
+      setText(x.arrow, open ? "▾" : "▸");
       // Background workers have their own IDs. Label groups made entirely
       // for one purpose without renaming a chat that also made helper calls.
       const memory = !byKey && g.r.agent === "codex" && g.rows.every((r) => purposeOf(r.kind) === "kind:memory_consolidation");
@@ -3855,7 +3866,7 @@ function routingPage(part) {
       setText(x.cost, [total.priced ? "≈" + fmtCost({ cost: total.cost, unpriced: 0 }) + (total.unpriced ? "+" : "") : "", credits].filter(Boolean).join(" · "));
       x.cost.hidden = !visibleMetrics.includes("cost") || !total.priced && !credits;
       x.cost.title = [total.priced ? costNote() : "", credits ? t("What {n} of these requests cost in their plan's credits, as the replies said", { n: g.rows.filter((r) => routeCredits([r])).length }) : ""].filter(Boolean).join("\n");
-      if (g.key) x.b.setAttribute("aria-expanded", String(open));
+      x.b.setAttribute("aria-expanded", String(open));
       els.push(x.b);
       if (open) els.push(...g.els);
     }
@@ -3927,6 +3938,7 @@ function routingPage(part) {
       reqRows.clear();
       sessionRows.clear();
       closedSessions.clear();
+      foldAll.hidden = true;
       renderActs(rs);
       return;
     }
@@ -3934,7 +3946,13 @@ function routingPage(part) {
     for (const id of reqRows.keys()) if (!ids.has(id)) reqRows.delete(id);
     // the requests, with their sessions' heads between them when grouped:
     // a request's row is made only when it is drawn
-    listItems = by === "key" ? groupedRows(rs, rs, true) : by === "session" && rs.some((r) => r.session) ? groupedRows(rs, rs) : rs;
+    const grouped = by === "key" || by === "session" && rs.some((r) => r.session);
+    listItems = by === "key" ? groupedRows(rs, rs, true) : grouped ? groupedRows(rs, rs) : rs;
+    const folds = grouped && [...sessionRows.keys()].some((k) => !closedSessions.has(k)), fold = t(folds ? "Collapse all" : "Expand all");
+    foldAll.hidden = !grouped || sessionRows.size < 2;
+    setAttr(foldAll, "title", fold);
+    setAttr(foldAll, "aria-label", fold);
+    if (foldAll.dataset.on !== String(folds)) { foldAll.dataset.on = folds; foldAll.replaceChildren(svg(folds ? "m5 3 3 3 3-3M5 13l3-3 3 3" : "m5 6 3-3 3 3M5 10l3 3 3-3", 13, 1.6)); }
     rowsMoved = false;
     drawList();
     // measuring the rows' lines forces a layout: only when a row was made
@@ -7190,8 +7208,12 @@ function routingPage(part) {
     rAdd.append(svg(PLUS, 11, 1.8), el("span", "", t("Add a rule")));
     const RULES_TIP = "Checked top first when you send a message: the first that matches sends that turn to its model first; the rest stay behind it if it fails. A turn under way is never moved.";
     const rTip = infoTip(t(RULES_TIP));
+    // with no rule yet, an example of the split asked for most (mr_coffee0083:
+    // one model to think, others to write code), added as a rule to edit
+    const rTry = el("button", "text rt-try", t("Add an example rule"));
+    rTry.type = "button";
     const rAdds = el("div", "rt-gadds");
-    rAdds.append(rAdd, rTip);
+    rAdds.append(rAdd, rTip, rTry);
     const rHint2 = el("div", "hint");
     // the conditions opened on each rule while the editor is open: one just
     // added, or emptied while typing, stays in its place until it is taken
@@ -7307,6 +7329,8 @@ function routingPage(part) {
       condsSeen.disconnect();
       condsSeen.observe(rlist);
       rAdd.hidden = rTip.hidden = d.members.length < 2;
+      const none = d.members.length > 1 && d.routing !== "manual" && !d.rules.length;
+      rTry.hidden = !none;
       // only what holds the rules back is said in a line: how they work is
       // under the ⓘ beside Add a rule
       rHint2.textContent = d.members.length < 2 ? t("With two models or more, a rule can send some turns to one of them first.")
@@ -7679,6 +7703,14 @@ function routingPage(part) {
       addCond(r, "intent");
     };
     rAdd.onclick = addIntentRule;
+    // the example: turns asking for planning or hard thinking to the last
+    // member, its words in the box to change
+    rTry.onclick = () => {
+      const r = newRule();
+      r.intent = t("planning, design, or a hard problem to think through");
+      d.rules.push(r);
+      addCond(r, "intent");
+    };
     // the classifier, once a rule has an intent or the effort is picked
     // per turn: the model asked which intent a turn's message is and how
     // hard it is. Jev (a decision provider's model) answers both in one
