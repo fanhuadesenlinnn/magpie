@@ -664,6 +664,8 @@ magpie gateway-key models <id> openai/gpt-5 anthropic/*   # only these models
 magpie gateway-key models <id> all     # every model
 magpie gateway-key accounts <id> codex/me@example.com   # only these accounts
 magpie gateway-key accounts <id> all    # every account
+magpie gateway-key mcp <id> github fs/read_file   # only these MCP servers and tools
+magpie gateway-key mcp <id> none        # no MCP server (all: every one)
 magpie gateway-key quotas <id> on      # told the quotas of what it may use
 ```
 
@@ -775,6 +777,25 @@ lists, but the key may ask one itself, at `/v1/systemone` or in another
 magpie's list of decision models, only when it names it (or its
 `<provider>/*`). The menu lists the decision models after their provider's
 chat models, each marked as one (Kautism on Discord).
+
+A gateway key can also be held to some **MCP servers and tools** (wakaka
+on Discord): pick them under **MCP servers** in the key row's ⋯ menu (a
+key held to some then shows a badge that opens the same list), or run
+`magpie gateway-key mcp <id> github fs/read_file` (`all` takes the
+restriction off, `none` gives the key no MCP server). An entry is a
+server's name, every tool of it, or `<server>/<tool>`, that tool alone; the
+servers are the Library's (by their names there) and magpie's own:
+`magpie-web-search`, `magpie-vision`, `magpie-image`, `magpie-browser` and
+`magpie-tools`. Every route that reaches a server holds the key to it: the
+MCP hub lists only the servers and tools the key may use and refuses a
+call of any other; `/mcp/<name>` and `/mcp/run/<name>` answer 403 for a
+server the key may not use, leave the tools it may not use out of
+`tools/list` and refuse a `tools/call` of one; magpie's own servers do the
+same, and `/v1/magpie/mcp` lists only those the key may use. A key issued
+under a held key is held to its issuer's list too. `GET /v1/magpie/limit`
+tells a held key its list as `mcp`. A model's own web search, which magpie
+serves through its search when the provider has none, is not an MCP call
+and is not held by this list.
 
 A gateway key can also be held to some **accounts** (#905): the accounts
 and keys its requests may use, picked in the same menu right after their
@@ -1505,7 +1526,10 @@ write kept for 5 minutes at 1.25× input and one kept for an hour at 2× input,
 and its usage says which were which (`cache_creation.ephemeral_5m_input_tokens`
 / `ephemeral_1h_input_tokens`, from the API and from Claude Code's
 transcripts). The fourth number is the 5-minute price; the fifth, when not
-given, is 2× input for a Claude model — Anthropic's rule. Any other model has
+given, is 2× input for a Claude model — Anthropic's rule. Copilot bills a
+cache write at one price however long it is kept (its `copilot_usage` counts a
+1-hour write as the `cache_write` a 5-minute one is), so a model on Copilot has
+no 1-hour price unless you give one, Claude's too. Any other model has
 no 1-hour price unless you give one: a 1-hour write it reports is counted at
 the 5-minute price, and neither `magpie model price` nor the app's boxes show
 a 1-hour price for it. A call recorded
