@@ -349,6 +349,18 @@ type Provider struct {
 	// the top-level tools even where magpie's default would send the item.
 	AdditionalToolsOff bool `json:"additionalToolsOff,omitempty"`
 
+	// PassErrors, `errors=pass`, is the user's word that the client, not
+	// magpie, deals with what the provider's errors say (ne9ko9 on
+	// Discord): a request to it is asked once, its error goes to the
+	// agent as it came (its status, and its body as written where the
+	// agent's API is the provider's own, else in the agent's shape with
+	// the vendor's type, code and words), nothing about it is inferred
+	// (a prompt too long, a busy relay), it is not asked again in place
+	// or of a fallback or a group's next member, and none of its keys
+	// rests for it. Off, the default, magpie handles them. Only a provider
+	// of a key takes it (TakesPassErrors).
+	PassErrors bool `json:"passErrors,omitempty"`
+
 	// Patience is how many seconds more a request to this provider alone,
 	// not through a group, may be kept once it has failed in a way that
 	// passes (overloaded, unavailable, rate limited for a moment) and the
@@ -415,6 +427,14 @@ type Provider struct {
 	// added takes it (TakesInsecureTLS), and only for the hosts of its own
 	// base URLs (UncheckedHosts); see Via.
 	InsecureTLS bool `json:"insecureTLS,omitempty"`
+
+	// HTTP1 has magpie speak HTTP/1.1 to the provider's own hosts, never
+	// HTTP/2 (kepner_53726 on Discord: a company gateway whose HTTP/2
+	// connections broke mid-reply with "tls: bad record MAC" while
+	// HTTP/1.1 to it held). Only a provider the user added takes it
+	// (TakesInsecureTLS), for the hosts of its own base URLs
+	// (UncheckedHosts); see Via.
+	HTTP1 bool `json:"http1,omitempty"`
 
 	// Proxy is the proxy magpie's requests to this provider go through
 	// (#237: Codex through one, a vendor at home without): "" follows
@@ -1151,6 +1171,9 @@ func Save(p Provider) error {
 		}
 		if p.InsecureTLS && !p.TakesInsecureTLS() {
 			return fmt.Errorf("%s is a preset's: only a provider you added with your own base URL can skip the certificate check", p.Name)
+		}
+		if p.HTTP1 && !p.TakesInsecureTLS() {
+			return fmt.Errorf("%s is a preset's: only a provider you added with your own base URL can be held to HTTP/1.1", p.Name)
 		}
 		if strings.Contains(p.Decide, WorkspaceID) {
 			return errors.New("Bailian's decision model is asked at your workspace's host: give its workspace ID (workspace=… or the editor's Workspace ID), or pick the Token Plan")

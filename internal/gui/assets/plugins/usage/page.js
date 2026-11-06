@@ -988,7 +988,9 @@ function overviewCards(list) {
 // key on its handle, or on a touch screen a long press (iOS Safari sends
 // no contextmenu for one), for the account whose section it was on, or
 // the whole card from its head
-let quotaPressed = 0; // when a long press last opened a card's menu
+// when a long press last opened a card's menu; never, at first (from 0, a
+// menu opened in the page's first second ate every click outside it)
+let quotaPressed = -Infinity;
 // the mouse events a phone makes up once the finger lifts don't close it,
 // nor press what the finger was on
 const quotaPressing = () => !!agentMenu && performance.now() - quotaPressed < 1000;
@@ -1733,7 +1735,7 @@ function ledLines(g, Y, x0, slot, segs) {
   segs.length = 0;
   if (!l) return;
   const speed = metric === "speed";
-  const { top } = ledCategories(l.chartBy ? { by: l.chartBy } : l, split, metric);
+  const { top, list } = ledCategories(l.chartBy ? { by: l.chartBy } : l, split, metric, true);
   const X = (i) => x0 + slot * i, dot = slot >= 12 ? 4.5 : 3;
   const at = (i, v) => [X(i), Y(v)];
   // stacked, each one goes under those before it, so a band never covers
@@ -1766,7 +1768,8 @@ function ledLines(g, Y, x0, slot, segs) {
   };
   if (speed) {
     series("\0all", "var(--muted)", totals.map((v) => (v > 0 ? v : null)), null, true);
-    for (const c of top) series(c.id, c.color, pts.map((p) => ledSpeed(p.by?.[split]?.[c.id]) || null));
+    const rest = new Map(pts.flatMap((p) => ledOthers(p.by?.[split] || {}, top, list)).map((c) => [c.id, c]));
+    for (const c of [...top, ...rest.values()]) series(c.id, c.color, pts.map((p) => ledSpeed(p.by?.[split]?.[c.id]) || null));
     return;
   }
   // from the bottom up: each one's part on what is under it, "Other" last
@@ -2062,7 +2065,7 @@ const ledGrow = new ResizeObserver(() => {
   ledGrowFrame = requestAnimationFrame(() => {
     ledGrowFrame = 0;
     const wrap = $("#ledWrap"), table = wrap.querySelector("table.led");
-    if (table && !table.classList.contains("tighter") && wrap.clientWidth && wrap.scrollWidth > wrap.clientWidth + 1) ledFit();
+    if (table && !table.classList.contains("tight2") && wrap.clientWidth && wrap.scrollWidth > wrap.clientWidth + 1) ledFit();
     ledHScroll();
   });
 });
@@ -2191,11 +2194,13 @@ function ledFit() {
   table.classList.toggle("tight", tight);
   // still too wide (#860: a Windows window at 175%, its wider fonts): the
   // price reference line goes too, in the cost's tooltip and the details
-  // as well, and names are cut shorter, whole in their tooltips
-  // still too wide: the first token's column goes (#2522), its value
-  // under the duration, and only then what follows
-  if (tight && over()) table.classList.add("tight2");
+  // as well, names are cut shorter, whole in their tooltips, and headers
+  // wrap. Only when that is still too wide does the first token's column
+  // go (#2522), its value under the duration: a column is the larger loss,
+  // and two Windows windows a little apart in width showed it on one and
+  // not the other (unscientific9 on Discord)
   if (tight && over()) table.classList.add("tighter");
+  if (tight && over()) table.classList.add("tight2");
   if (!hint) {
     hint = el("span", "led-tight");
     hint.id = "ledTight";
