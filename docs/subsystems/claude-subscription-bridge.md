@@ -646,6 +646,20 @@ as the helper waited, and every try was answered 502 "Claude Code has
 not answered magpie's initialize request in 10s" (#4504). A helper that
 answers nothing even then is ended (`tuiNoStart`), and the turn fails
 saying the interactive mode didn't start; the next turn tries it again.
+So does a helper that ends saying why Claude Code didn't come up ("claude-tui:
+…"), unless Claude Code ended itself first (`claudetui.EndedEarly`, as one
+that can't load its session does): a new Claude Code told the whole
+conversation waits on the same thing, and the turn was answered 502 after
+twice 45s (sowhynot). `TestClaudeTUINoPromptNotTriedAgain` holds both.
+A Claude Code that drew nothing in that time (0 bytes read) is said with
+what it runs meanwhile, from `ps` (`undrawn`, macOS and Linux): its
+Keychain read of its sign-in, `security find-generic-password`, has no
+time limit in Claude Code, and one held by a Keychain window or a locked
+keychain is named with what to do; any other command is named by its
+program alone, never its arguments. The helper doesn't end early on 0
+bytes: a Keychain window may still be answered, and Claude Code bounds its
+own network waits (about 30s) before it draws.
+`TestShimSaysWhatAnUndrawnClaudeWaitsOn` holds it.
 
 ## Why turns go on in one run
 
@@ -655,7 +669,7 @@ conversation is written to the cache again and its images are sent again.
 By default, that message holds the history in blocks of `historyChunk`
 messages, and magpie's one mark (Claude Code keeps three of Anthropic's four) is on the
 last whole block, else on the caller's instructions: a later run started
-anew for the same conversation within the hour reads the history up to an
+anew for the same conversation while it is cached reads the history up to an
 earlier run's mark, found within Anthropic's 20-block lookback. A
 conversation with no history (no reply that calls no tool, as a sub-agent's
 loop of tool calls that Claude Code's AgentSummary asks a summary of) has
@@ -664,6 +678,20 @@ history is not chunked, and image blocks count toward the lookback.
 A turn that goes on in the run that had the last one is told only the
 messages since (`renderClaudeTurn`), and Anthropic reads the rest from the
 cache.
+
+A run keeps its prompt cache as long as the user picked for Claude Code's
+main conversation (`claudeRunTTL`): `FORCE_PROMPT_CACHING_5M`, then
+`CLAUDE_CODE_PROMPT_CACHE_TTL`, in magpie's environment or settings.json's
+`env`, then settings.json's `promptCacheTtl` (the Agents page's "Prompt
+cache · main conversation"), and an hour with none of them, as Claude Code
+writes it on a subscription within its limits. The run is given it as
+`CLAUDE_CODE_PROMPT_CACHE_TTL` (`cleanClaudeEnvTTL`; a saved account's
+Claude Code reads its own folder's settings, not the user's), and magpie's
+mark in the first message is as long (`Request.runMark`), since Anthropic
+refuses a 1h mark after a 5m one. A session a run goes on from keeps the
+lifetime it started with (`cachePrefix.ttl`; one saved before it was kept
+is an hour's). Until 11-07 every run was given 1h whatever the pick
+(linkaww). `TestClaudeRunKeepsTheUsersCacheTTL`.
 
 ## Client-placed cache marks (#1717)
 
